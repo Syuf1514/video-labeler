@@ -5,7 +5,7 @@ import sys
 import pandas as pd
 import streamlit as st
 import yaml
-from streamlit import components
+import streamlit.components.v1 as components
 
 st.set_page_config(layout="centered")
 
@@ -36,7 +36,7 @@ sys.excepthook = log_exception
 STATE_PATH = "state.json"
 
 def load_state():
-    data = {"idx": 0, "video_dir": "videos"}
+    data = {"idx": 0, "video_dir": "videos", "sort_by": "filename", "order": "Ascending"}
     if os.path.exists(STATE_PATH):
         try:
             with open(STATE_PATH) as f:
@@ -50,15 +50,22 @@ def load_state():
 def save_state():
     try:
         with open(STATE_PATH, "w") as f:
-            json.dump({"idx": st.session_state.idx, "video_dir": st.session_state.video_dir}, f)
+            json.dump({
+                "idx": st.session_state.idx,
+                "video_dir": st.session_state.video_dir,
+                "sort_by": st.session_state.get("sort_by", "filename"),
+                "order": st.session_state.get("order", "Ascending"),
+            }, f)
     except Exception as e:
         logging.error("Failed to save state: %s", e)
 
 
-if "idx" not in st.session_state or "video_dir" not in st.session_state:
+if any(k not in st.session_state for k in ("idx", "video_dir", "sort_by", "order")):
     saved = load_state()
     st.session_state.idx = saved.get("idx", 0)
     st.session_state.video_dir = saved.get("video_dir", "videos")
+    st.session_state.sort_by = saved.get("sort_by", "filename")
+    st.session_state.order = saved.get("order", "Ascending")
 
 VIDEO_DIR = st.sidebar.text_input("Video folder", key="video_dir")
 
@@ -80,8 +87,21 @@ label_cols = [c for c in df.columns if pd.api.types.is_integer_dtype(df[c]) and 
 
 metadata_cols = [c for c in df.columns if c not in label_cols and c != "filename"]
 
-sort_by = st.sidebar.selectbox("Sort videos by", df.columns.tolist(), index=df.columns.get_loc('filename'))
-order = st.sidebar.radio("Order", ["Ascending", "Descending"], horizontal=True)
+sort_default = st.session_state.get("sort_by", "filename")
+if sort_default not in df.columns:
+    sort_default = df.columns[0]
+sort_by = st.sidebar.selectbox(
+    "Sort videos by",
+    df.columns.tolist(),
+    index=df.columns.get_loc(sort_default),
+    key="sort_by",
+)
+order = st.sidebar.radio(
+    "Order",
+    ["Ascending", "Descending"],
+    horizontal=True,
+    key="order",
+)
 
 with st.sidebar.expander("Logs"):
     if os.path.exists(LOG_PATH):
@@ -156,7 +176,7 @@ st.markdown(
 )
 video_path = os.path.join(VIDEO_DIR, current_file)
 
-video_col, meta_col = st.columns([3, 2])
+ctrl_col, video_col, meta_col = st.columns([1, 3, 2])
 
 with video_col:
     if os.path.exists(video_path):
@@ -166,6 +186,7 @@ with video_col:
         st.warning(f"Video file '{current_file}' not found")
         logging.error("Video file '%s' not found", current_file)
 
+with ctrl_col:
     st.caption(current_file)
 
     def toggle_label(col):
