@@ -8,12 +8,19 @@ import yaml
 import streamlit.components.v1 as components
 
 st.set_page_config(layout="centered")
-
 st.markdown(
     """
     <style>
-    .block-container {padding-top: 0.5rem;}
-    .stVideo video {height: 80vh;}
+    .block-container {
+        padding-top: 0.5rem;
+        max-width: 80% !important;
+        width: 80% !important;
+    }
+
+    video {
+        height: 80vh !important;
+        max-height: 80vh !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
