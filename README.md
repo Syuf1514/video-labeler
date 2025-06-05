@@ -1,125 +1,83 @@
-
 # 🎬 Video Labeling Web App (MVP)
 
-This is a minimal, fast, and easy-to-use **local web app** for labeling `.mp4` videos with custom tags. It’s designed for researchers, ML practitioners, and data engineers who need to sort and annotate a set of videos using metadata and store the labels in a structured way.
-
-Built with **Streamlit** and **pandas**, the app supports smooth video playback, CSV metadata display, and one-hot encoded label editing — all with keyboard shortcuts for efficient annotation.
+This project provides a tiny Streamlit app for quickly tagging small `.mp4` videos with custom labels. Videos and a `metadata.csv` file live inside a folder you choose. The app loads that CSV, shows each video with its metadata and lets you add or toggle labels. All label changes are saved back to the same CSV immediately.
 
 ---
 
-## 🚀 Features
+## Features
 
-- ✅ Load and preview short `.mp4` videos from a local folder
-- ✅ Load external metadata (`metadata.csv`) and match by filename
-- ✅ Display metadata alongside the video
-- ✅ Add or select **custom labels** — stored as one-hot columns in the same CSV
-- ✅ Previous / Next navigation through videos
-- ✅ Sort videos by name or any metadata column
-- ✅ Auto-save label updates
-- ✅ Progress indicator (e.g. "Video 12 of 300")
-- ✅ Keyboard shortcuts for labeling and navigation
+- Load and preview videos from any local folder
+- Read external metadata (`metadata.csv`) matched by `filename`
+- Display all metadata fields next to the video
+- Create new labels on the fly and store them as one‑hot columns
+- Previous/Next navigation with buttons or arrow‑key shortcuts
+- Toggle labels with checkboxes or number keys (1‑9)
+- Auto‑save after every change
+- Progress indicator ("Video X of N")
+- Sort videos by filename or any other column
 
 ---
 
-## 🗂 Folder Structure
+## Folder Layout
 
 ```
+video-labeler/
+├── app.py            # Streamlit application
+├── requirements.txt  # Dependencies
+├── README.md         # This file
+└── videos/
+    ├── <your .mp4 files>
+    └── metadata.csv
+```
 
-video\_labeler/
-├── app.py                  # Main Streamlit app
-├── requirements.txt        # Python dependencies
-└── README.md               # You're reading it
+`metadata.csv` must contain a `filename` column that matches the video files. Any additional columns are treated as metadata, except for integer columns containing only 0/1 which are interpreted as labels.
 
-folder with videos/
-├── video1.mp4
-└── ...
-├── metadata.csv            # CSV with metadata and label columns
-
-````
-
----
-
-## 🧾 `metadata.csv` Format
-
-Your CSV must include at least a `filename` column, matching each video’s filename exactly.
-
-Example:
+Example `metadata.csv`:
 
 ```csv
-filename,duration,source,age
-video1.mp4,3.5,webcam,25
-video2.mp4,2.9,upload,42
-````
+filename,duration,source
+video1.mp4,1.0,generator
+video2.mp4,1.0,generator
+```
 
-After labeling, the CSV will be auto-extended with one-hot label columns:
+After labeling, the CSV will look like:
 
 ```csv
-filename,duration,source,age,funny,blurry,suspicious
-video1.mp4,3.5,webcam,25,1,0,0
-video2.mp4,2.9,upload,42,0,0,1
+filename,duration,source,funny,blurry
+video1.mp4,1.0,generator,1,0
+video2.mp4,1.0,generator,0,1
 ```
 
 ---
 
-## 🛠 Installation
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/your-username/video-labeler.git
-cd video-labeler
-```
-
-### 2. Create a virtual environment (optional but recommended)
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # on Windows: .venv\Scripts\activate
-```
-
-### 3. Install dependencies
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
+(Using a virtual environment is recommended.)
+
 ---
 
-## ▶️ Run the App
+## Running
 
 ```bash
 streamlit run app.py
 ```
 
-It will launch in your browser at `http://localhost:8501`.
+Open <http://localhost:8501> in your browser. The sidebar lets you select the video folder (default is `videos`).
+
+### Keyboard shortcuts
+
+- **Right / Left arrows** – next or previous video
+- **1‑9** – toggle the corresponding label checkbox
+- **Type a label name** in the input box and press **Add Label** to create a new one
+
+Make sure the page has focus (click anywhere on the page) so the keys are captured.
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## License
 
-| Action         | Shortcut       |
-| -------------- | -------------- |
-| Add new label  | Type + Enter   |
-| Toggle label   | Click or key   |
-| Next video     | Right arrow →  |
-| Previous video | Left arrow ←   |
-| Save label     | Auto on toggle |
-
-(More shortcuts can be added in `app.py` using Streamlit keyboard event hacks or JS injection.)
-
----
-
-## 📋 TODO / Future Work
-
-* [ ] Add search/filter for labels
-* [ ] Add multi-user support or session tracking
-* [ ] Export labeled data as JSON or separate file
-* [ ] Optional cloud backup (e.g. GCS sync)
-
----
-
-## 📄 License
-
-MIT License. Use freely with credit.
-
----
+MIT
