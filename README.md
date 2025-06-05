@@ -25,7 +25,7 @@ video-labeler/
 ├── app.py            # Streamlit application
 ├── requirements.txt  # Dependencies
 ├── README.md         # This file
-└── videos/
+└── sample_videos/
     ├── <your .mp4 files>
     └── metadata.csv
 ```
@@ -66,7 +66,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open <http://localhost:8501> in your browser. The sidebar lets you select the video folder (default is `videos`).
+Open <http://localhost:8501> in your browser. The sidebar lets you select the video folder (default is `sample_videos`).
 
 ### Keyboard shortcuts
 

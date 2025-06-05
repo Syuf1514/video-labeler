@@ -23,6 +23,9 @@ LOG_PATH = "app.log"
 logging.basicConfig(filename=LOG_PATH, level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
+# Default directory that contains example videos and metadata.
+DEFAULT_DIR = "sample_videos"
+
 
 def log_exception(exc_type, exc_value, exc_tb):
     if issubclass(exc_type, KeyboardInterrupt):
@@ -36,7 +39,7 @@ sys.excepthook = log_exception
 STATE_PATH = "state.json"
 
 def load_state():
-    data = {"idx": 0, "video_dir": "videos", "sort_by": "filename", "order": "Ascending"}
+    data = {"idx": 0, "video_dir": DEFAULT_DIR, "sort_by": "filename", "order": "Ascending"}
     if os.path.exists(STATE_PATH):
         try:
             with open(STATE_PATH) as f:
@@ -63,7 +66,7 @@ def save_state():
 if any(k not in st.session_state for k in ("idx", "video_dir", "sort_by", "order")):
     saved = load_state()
     st.session_state.idx = saved.get("idx", 0)
-    st.session_state.video_dir = saved.get("video_dir", "videos")
+    st.session_state.video_dir = saved.get("video_dir", DEFAULT_DIR)
     st.session_state.sort_by = saved.get("sort_by", "filename")
     st.session_state.order = saved.get("order", "Ascending")
 
@@ -137,6 +140,8 @@ def prev_video():
     logging.info("Moved to previous video: %s", video_files[st.session_state.idx])
 
 # Capture keyboard
+# Some older Streamlit versions do not support the ``key`` argument for
+# ``components.html``. Avoid using it for compatibility.
 key = components.html(
     """
     <script>
@@ -148,7 +153,6 @@ key = components.html(
     </script>
     """,
     height=0,
-    key="nav",
 )
 
 if not isinstance(key, str):
