@@ -8,13 +8,48 @@ from st_keyup import st_keyup
 
 st.set_page_config(layout="wide")
 
+st.markdown(
+    """
+    <style>
+    .block-container {padding-top: 0.5rem;}
+    .stVideo video {height: 80vh;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 LOG_PATH = "app.log"
 logging.basicConfig(filename=LOG_PATH, level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
 
 STATE_PATH = "state.json"
 
-VIDEO_DIR = st.sidebar.text_input("Video folder", "videos")
+def load_state():
+    data = {"idx": 0, "video_dir": "videos"}
+    if os.path.exists(STATE_PATH):
+        try:
+            with open(STATE_PATH) as f:
+                stored = json.load(f)
+            data.update(stored)
+        except Exception as e:
+            logging.error("Failed to load state: %s", e)
+    return data
+
+
+def save_state():
+    try:
+        with open(STATE_PATH, "w") as f:
+            json.dump({"idx": st.session_state.idx, "video_dir": st.session_state.video_dir}, f)
+    except Exception as e:
+        logging.error("Failed to save state: %s", e)
+
+
+if "idx" not in st.session_state or "video_dir" not in st.session_state:
+    saved = load_state()
+    st.session_state.idx = saved.get("idx", 0)
+    st.session_state.video_dir = saved.get("video_dir", "videos")
+
+VIDEO_DIR = st.sidebar.text_input("Video folder", st.session_state.video_dir, key="video_dir")
 
 if not os.path.isdir(VIDEO_DIR):
     st.error(f"Folder '{VIDEO_DIR}' not found")
@@ -33,29 +68,6 @@ else:
 label_cols = [c for c in df.columns if pd.api.types.is_integer_dtype(df[c]) and df[c].dropna().isin([0, 1]).all()]
 
 metadata_cols = [c for c in df.columns if c not in label_cols and c != "filename"]
-
-
-def load_state():
-    if os.path.exists(STATE_PATH):
-        try:
-            with open(STATE_PATH) as f:
-                data = json.load(f)
-            return data.get("idx", 0)
-        except Exception as e:
-            logging.error("Failed to load state: %s", e)
-    return 0
-
-
-def save_state():
-    try:
-        with open(STATE_PATH, "w") as f:
-            json.dump({"idx": st.session_state.idx}, f)
-    except Exception as e:
-        logging.error("Failed to save state: %s", e)
-
-
-if 'idx' not in st.session_state:
-    st.session_state.idx = load_state()
 
 sort_by = st.sidebar.selectbox("Sort videos by", df.columns.tolist(), index=df.columns.get_loc('filename'))
 
@@ -110,7 +122,10 @@ elif key.isdigit():
         logging.info("Toggled label %s for video %s via keyboard", col, current_file)
 
 current_file = video_files[st.session_state.idx]
-st.write(f"### Video {st.session_state.idx + 1} of {len(video_files)} : {current_file}")
+st.markdown(
+    f"<div style='text-align:right;color:gray'>{st.session_state.idx + 1}/{len(video_files)}</div>",
+    unsafe_allow_html=True,
+)
 video_path = os.path.join(VIDEO_DIR, current_file)
 
 video_col, meta_col = st.columns([3, 2])
@@ -123,7 +138,7 @@ with video_col:
         st.warning(f"Video file '{current_file}' not found")
         logging.error("Video file '%s' not found", current_file)
 
-    st.subheader("Labels (press 1..9 to toggle)")
+    st.caption(current_file)
     for i, col in enumerate(label_cols):
         default = bool(df.loc[st.session_state.idx, col])
         key = f"lbl_{col}_{st.session_state.idx}"
@@ -149,7 +164,7 @@ with video_col:
         st.button("Next ▶", on_click=next_video, key="next")
 
 with meta_col:
-    st.subheader("Metadata")
+    st.caption("Metadata")
     metadata = df.loc[st.session_state.idx, metadata_cols].to_dict()
     yaml_text = yaml.safe_dump(metadata, sort_keys=False, allow_unicode=True)
     st.code(yaml_text, language="yaml")
