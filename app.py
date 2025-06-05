@@ -1,12 +1,24 @@
 import os
+import json
+import logging
 import pandas as pd
 import streamlit as st
+import yaml
 from st_keyup import st_keyup
+
+st.set_page_config(layout="wide")
+
+LOG_PATH = "app.log"
+logging.basicConfig(filename=LOG_PATH, level=logging.INFO,
+                    format="%(asctime)s [%(levelname)s] %(message)s")
+
+STATE_PATH = "state.json"
 
 VIDEO_DIR = st.sidebar.text_input("Video folder", "videos")
 
 if not os.path.isdir(VIDEO_DIR):
     st.error(f"Folder '{VIDEO_DIR}' not found")
+    logging.error("Folder '%s' not found", VIDEO_DIR)
     st.stop()
 
 CSV_PATH = os.path.join(VIDEO_DIR, "metadata.csv")
@@ -14,6 +26,7 @@ if os.path.exists(CSV_PATH):
     df = pd.read_csv(CSV_PATH)
 else:
     st.error(f"metadata.csv not found in {VIDEO_DIR}")
+    logging.error("metadata.csv not found in %s", VIDEO_DIR)
     st.stop()
 
 # Determine label columns (int columns with only 0/1 values)
@@ -21,10 +34,39 @@ label_cols = [c for c in df.columns if pd.api.types.is_integer_dtype(df[c]) and 
 
 metadata_cols = [c for c in df.columns if c not in label_cols and c != "filename"]
 
+
+def load_state():
+    if os.path.exists(STATE_PATH):
+        try:
+            with open(STATE_PATH) as f:
+                data = json.load(f)
+            return data.get("idx", 0)
+        except Exception as e:
+            logging.error("Failed to load state: %s", e)
+    return 0
+
+
+def save_state():
+    try:
+        with open(STATE_PATH, "w") as f:
+            json.dump({"idx": st.session_state.idx}, f)
+    except Exception as e:
+        logging.error("Failed to save state: %s", e)
+
+
 if 'idx' not in st.session_state:
-    st.session_state.idx = 0
+    st.session_state.idx = load_state()
 
 sort_by = st.sidebar.selectbox("Sort videos by", df.columns.tolist(), index=df.columns.get_loc('filename'))
+
+with st.sidebar.expander("Logs"):
+    if os.path.exists(LOG_PATH):
+        try:
+            with open(LOG_PATH) as f:
+                lines = f.readlines()
+            st.text("".join(lines[-20:]))
+        except Exception as e:
+            st.text(f"Failed to read log: {e}")
 
 if sort_by:
     df = df.sort_values(by=sort_by).reset_index(drop=True)
@@ -32,67 +74,85 @@ if sort_by:
 video_files = df['filename'].tolist()
 
 def save_df():
-    df.to_csv(CSV_PATH, index=False)
+    try:
+        df.to_csv(CSV_PATH, index=False)
+    except Exception as e:
+        logging.error("Failed to save CSV: %s", e)
 
 # Navigation callbacks
 
 def next_video():
     st.session_state.idx = (st.session_state.idx + 1) % len(df)
+    save_state()
+    logging.info("Moved to next video: %s", video_files[st.session_state.idx])
 
 def prev_video():
     st.session_state.idx = (st.session_state.idx - 1) % len(df)
+    save_state()
+    logging.info("Moved to previous video: %s", video_files[st.session_state.idx])
 
 # Capture keyboard
 key = st_keyup("", key="nav", label_visibility="collapsed")
 if key == "ArrowRight":
     next_video()
+    logging.info("Next video via keyboard")
 elif key == "ArrowLeft":
     prev_video()
+    logging.info("Previous video via keyboard")
 elif key.isdigit():
     n = int(key)
     if 1 <= n <= len(label_cols):
         col = label_cols[n-1]
         df.loc[st.session_state.idx, col] = 1 - df.loc[st.session_state.idx, col]
-        st.session_state[f"lbl_{col}"] = bool(df.loc[st.session_state.idx, col])
+        st.session_state[f"lbl_{col}_{st.session_state.idx}"] = bool(df.loc[st.session_state.idx, col])
         save_df()
+        current_file = video_files[st.session_state.idx]
+        logging.info("Toggled label %s for video %s via keyboard", col, current_file)
 
 current_file = video_files[st.session_state.idx]
-
 st.write(f"### Video {st.session_state.idx + 1} of {len(video_files)} : {current_file}")
 video_path = os.path.join(VIDEO_DIR, current_file)
-if os.path.exists(video_path):
-    video_bytes = open(video_path, 'rb').read()
-    st.video(video_bytes)
-else:
-    st.warning(f"Video file '{current_file}' not found")
 
-# Display metadata
-st.subheader("Metadata")
-st.table(df.loc[st.session_state.idx, metadata_cols].to_frame().T)
+video_col, meta_col = st.columns([3, 2])
 
-st.subheader("Labels (press 1..9 to toggle)")
+with video_col:
+    if os.path.exists(video_path):
+        video_bytes = open(video_path, 'rb').read()
+        st.video(video_bytes, autoplay=True, muted=True)
+    else:
+        st.warning(f"Video file '{current_file}' not found")
+        logging.error("Video file '%s' not found", current_file)
 
-for i, col in enumerate(label_cols):
-    default = bool(df.loc[st.session_state.idx, col])
-    checked = st.checkbox(f"{i+1}. {col}", value=default, key=f"lbl_{col}")
-    if checked != default:
-        df.loc[st.session_state.idx, col] = int(checked)
-        save_df()
+    st.subheader("Labels (press 1..9 to toggle)")
+    for i, col in enumerate(label_cols):
+        default = bool(df.loc[st.session_state.idx, col])
+        key = f"lbl_{col}_{st.session_state.idx}"
+        checked = st.checkbox(f"{i+1}. {col}", value=default, key=key)
+        if checked != default:
+            df.loc[st.session_state.idx, col] = int(checked)
+            save_df()
 
-new_label = st.text_input("Add new label")
-if st.button("Add Label") and new_label:
-    if new_label not in df.columns:
-        df[new_label] = 0
-        label_cols.append(new_label)
-        df.loc[st.session_state.idx, new_label] = 1
-        st.session_state[f"lbl_{new_label}"] = True
-        save_df()
-        st.experimental_rerun()
+    new_label = st.text_input("Add new label")
+    if st.button("Add Label") and new_label:
+        if new_label not in df.columns:
+            df[new_label] = 0
+            label_cols.append(new_label)
+            df.loc[st.session_state.idx, new_label] = 1
+            st.session_state[f"lbl_{new_label}_{st.session_state.idx}"] = True
+            save_df()
+            st.experimental_rerun()
 
-col1, col2 = st.columns(2)
-with col1:
-    st.button("◀ Previous", on_click=prev_video, key="prev")
-with col2:
-    st.button("Next ▶", on_click=next_video, key="next")
+    nav1, nav2 = st.columns(2)
+    with nav1:
+        st.button("◀ Previous", on_click=prev_video, key="prev")
+    with nav2:
+        st.button("Next ▶", on_click=next_video, key="next")
+
+with meta_col:
+    st.subheader("Metadata")
+    metadata = df.loc[st.session_state.idx, metadata_cols].to_dict()
+    yaml_text = yaml.safe_dump(metadata, sort_keys=False, allow_unicode=True)
+    st.code(yaml_text, language="yaml")
 
 save_df()
+save_state()
