@@ -1,12 +1,13 @@
 import os
 import json
 import logging
+import sys
 import pandas as pd
 import streamlit as st
 import yaml
 from st_keyup import st_keyup
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="centered")
 
 st.markdown(
     """
@@ -21,6 +22,16 @@ st.markdown(
 LOG_PATH = "app.log"
 logging.basicConfig(filename=LOG_PATH, level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
+
+
+def log_exception(exc_type, exc_value, exc_tb):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+        return
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_tb))
+
+
+sys.excepthook = log_exception
 
 STATE_PATH = "state.json"
 
@@ -70,6 +81,7 @@ label_cols = [c for c in df.columns if pd.api.types.is_integer_dtype(df[c]) and 
 metadata_cols = [c for c in df.columns if c not in label_cols and c != "filename"]
 
 sort_by = st.sidebar.selectbox("Sort videos by", df.columns.tolist(), index=df.columns.get_loc('filename'))
+order = st.sidebar.radio("Order", ["Ascending", "Descending"], horizontal=True)
 
 with st.sidebar.expander("Logs"):
     if os.path.exists(LOG_PATH):
@@ -81,7 +93,8 @@ with st.sidebar.expander("Logs"):
             st.text(f"Failed to read log: {e}")
 
 if sort_by:
-    df = df.sort_values(by=sort_by).reset_index(drop=True)
+    asc = order == "Ascending"
+    df = df.sort_values(by=sort_by, ascending=asc).reset_index(drop=True)
 
 video_files = df['filename'].tolist()
 
@@ -105,7 +118,7 @@ def prev_video():
 
 # Capture keyboard
 key = st_keyup("", key="nav", label_visibility="collapsed")
-if key == "ArrowRight":
+if key in ("ArrowRight", " "):
     next_video()
     logging.info("Next video via keyboard")
 elif key == "ArrowLeft":
@@ -133,19 +146,29 @@ video_col, meta_col = st.columns([3, 2])
 with video_col:
     if os.path.exists(video_path):
         video_bytes = open(video_path, 'rb').read()
-        st.video(video_bytes, autoplay=True, muted=True)
+        st.video(video_bytes, autoplay=True, muted=False)
     else:
         st.warning(f"Video file '{current_file}' not found")
         logging.error("Video file '%s' not found", current_file)
 
     st.caption(current_file)
+
+    def toggle_label(col):
+        val = st.session_state[f"lbl_{col}_{st.session_state.idx}"]
+        df.loc[st.session_state.idx, col] = int(val)
+        save_df()
+        logging.info("Toggled label %s for video %s", col, current_file)
+
     for i, col in enumerate(label_cols):
         default = bool(df.loc[st.session_state.idx, col])
         key = f"lbl_{col}_{st.session_state.idx}"
-        checked = st.checkbox(f"{i+1}. {col}", value=default, key=key)
-        if checked != default:
-            df.loc[st.session_state.idx, col] = int(checked)
-            save_df()
+        st.checkbox(
+            f"{i+1}. {col}",
+            value=default,
+            key=key,
+            on_change=toggle_label,
+            args=(col,),
+        )
 
     new_label = st.text_input("Add new label")
     if st.button("Add Label") and new_label:
