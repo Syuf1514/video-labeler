@@ -5,7 +5,7 @@ import sys
 import pandas as pd
 import streamlit as st
 import yaml
-from st_keyup import st_keyup
+from streamlit import components
 
 st.set_page_config(layout="centered")
 
@@ -60,7 +60,7 @@ if "idx" not in st.session_state or "video_dir" not in st.session_state:
     st.session_state.idx = saved.get("idx", 0)
     st.session_state.video_dir = saved.get("video_dir", "videos")
 
-VIDEO_DIR = st.sidebar.text_input("Video folder", st.session_state.video_dir, key="video_dir")
+VIDEO_DIR = st.sidebar.text_input("Video folder", key="video_dir")
 
 if not os.path.isdir(VIDEO_DIR):
     st.error(f"Folder '{VIDEO_DIR}' not found")
@@ -117,7 +117,22 @@ def prev_video():
     logging.info("Moved to previous video: %s", video_files[st.session_state.idx])
 
 # Capture keyboard
-key = st_keyup("", key="nav", label_visibility="collapsed")
+key = components.html(
+    """
+    <script>
+    document.addEventListener('keydown', (e) => {
+        const k = e.key;
+        Streamlit.setComponentValue(k);
+        e.preventDefault();
+    });
+    </script>
+    """,
+    height=0,
+    key="nav",
+)
+
+if not isinstance(key, str):
+    key = ""
 if key in ("ArrowRight", " "):
     next_video()
     logging.info("Next video via keyboard")
@@ -178,7 +193,7 @@ with video_col:
             df.loc[st.session_state.idx, new_label] = 1
             st.session_state[f"lbl_{new_label}_{st.session_state.idx}"] = True
             save_df()
-            st.experimental_rerun()
+            st.rerun()
 
     nav1, nav2 = st.columns(2)
     with nav1:
