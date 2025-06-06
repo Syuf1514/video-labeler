@@ -1,1 +1,1 @@
-{"idx": 0, "video_dir": "videos", "sort_by": "score", "order": "Descending"}
+{"idx": 1, "csv_path": "your/csv/path.csv", "sort_by": "path", "order": "Ascending"}
